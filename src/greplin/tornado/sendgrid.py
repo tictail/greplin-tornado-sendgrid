@@ -36,26 +36,40 @@ class Sendgrid(object):
     self._user = user
     self._secret = secret
 
-
-  def send_email(self, callback, **kwargs):
-    """Send a message through SendGrid"""
+  def prepare_request(self, **kwargs):
+    """Return a prepared HTTPRequest or None if params are incorrect"""
     if 'text' and 'html' not in kwargs:
       logging.warning("Message not sent. 'text' or 'html' fields required")
-      callback(None)
-      return
+      return None
     for required in self._required_attrs:
       if required not in kwargs:
         logging.error("Message not sent. Missing required argument %s", required)
-        callback(None)
-        return
-    credentials = {'api_user':self._user, 'api_key':self._secret}
-    api_url = "%s.%s?%s" % (self._BASE_URL, self._FORMAT,
-                        urllib.urlencode(credentials))
+        return None
+    kwargs.update({'api_user': self._user, 'api_key': self._secret})
+    api_url = "%s.%s" % (self._BASE_URL, self._FORMAT)
     post_body = urllib.urlencode(kwargs)
-    http = httpclient.AsyncHTTPClient()
     request = httpclient.HTTPRequest(api_url, method='POST', body=post_body)
-    http.fetch(request, functools.partial(self._on_sendgrid_result, callback))
+    return request
 
+  def send_email_blocking(self, **kwargs):
+    """Send a message through SendGrid using a blocking HTTPClient"""
+    request = self.prepare_request(**kwargs)
+    if not request:
+        # prepare_request will log reason for not accepting params
+        return False
+    http = httpclient.HTTPClient()
+    response = http.fetch(request)
+    logging.info("Sendgrid blocking API request response: %s", response)
+    return response.code == 200
+
+  def send_email(self, callback, **kwargs):
+    """Send a message through SendGrid"""
+    request = self.prepare_request(**kwargs)
+    if not request:
+        # prepare_request will log reason for not accepting params
+        return
+    http = httpclient.AsyncHTTPClient()
+    http.fetch(request, functools.partial(self._on_sendgrid_result, callback))
 
   def _on_sendgrid_result(self, callback, result):
     """Parse out a result from SendGrid"""
@@ -65,8 +79,3 @@ class Sendgrid(object):
       callback(None)
       return
     callback(True)
-
-
-
-
-
