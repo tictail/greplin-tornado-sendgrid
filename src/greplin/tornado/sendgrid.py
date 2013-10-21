@@ -73,6 +73,11 @@ class Sendgrid(object):
 
   def _on_sendgrid_result(self, callback, result):
     """Parse out a result from SendGrid"""
+    if result.body is None:
+      logging.error("SendGrid HTTP error: %s", result.error)
+      callback(None)
+      return
+
     result = escape.json_decode(result.body)
     if result.get("errors"):
       logging.error("SendGrid API error: %s", result['errors'])
